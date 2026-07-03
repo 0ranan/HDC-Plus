@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Rust
+target/
+debug/
+release/
+*.rs.bk
+*.rlib
+*.profraw
+
+# Tauri
+src-tauri/gen/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
