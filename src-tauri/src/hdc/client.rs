@@ -55,6 +55,37 @@ impl HdcClient {
         self.get_device_detail(id)
     }
 
+    pub fn install_hap(&self, device_id: &str, hap_path: &str) -> Result<String, String> {
+        self.validate_hap_file(hap_path)?;
+        let output = self.execute(&["-t", device_id, "install", "-r", hap_path])?;
+        let lower = output.to_lowercase();
+        if lower.contains("error:") || lower.contains("failed") {
+            Err(extract_error(&output))
+        } else {
+            Ok(output)
+        }
+    }
+
+    pub fn validate_hap_file(&self, path: &str) -> Result<(), String> {
+        let path_obj = std::path::Path::new(path);
+        if !path_obj.exists() {
+            return Err(format!("文件不存在: {}", path));
+        }
+        if !path_obj.is_file() {
+            return Err(format!("路径不是有效文件: {}", path));
+        }
+        match path_obj.extension().and_then(|e| e.to_str()) {
+            Some("hap") | Some("HAP") => {}
+            _ => return Err(format!("文件格式无效，请选择 HAP 格式文件: {}", path)),
+        }
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| format!("无法读取文件信息: {}", e))?;
+        if metadata.len() == 0 {
+            return Err("安装包不完整，文件大小为 0".to_string());
+        }
+        Ok(())
+    }
+
     fn get_device_detail(&self, id: &str) -> Result<Device, String> {
         let output = self.execute(&["-t", id, "shell", "getprop"])?;
 
@@ -91,17 +122,32 @@ impl HdcClient {
             .output()
             .map_err(|e| format!("执行 HDC 命令失败: {}", e))?;
 
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("HDC 命令执行错误: {}", stderr.trim()));
+            let mut msg = String::new();
+            if !stdout.trim().is_empty() {
+                msg.push_str(stdout.trim());
+            }
+            if !stderr.trim().is_empty() {
+                if !msg.is_empty() {
+                    msg.push('\n');
+                }
+                msg.push_str(stderr.trim());
+            }
+            if msg.is_empty() {
+                msg = String::from("未知错误");
+            }
+            return Err(msg);
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        if stdout.trim().is_empty() {
+        let result = if stdout.trim().is_empty() { stderr } else { stdout };
+        if result.trim().is_empty() {
             return Err(String::from("HDC 命令返回空结果"));
         }
 
-        Ok(stdout)
+        Ok(result)
     }
 }
 
@@ -148,6 +194,15 @@ fn extract_prop(output: &str, prop_name: &str) -> Option<String> {
     }
 
     None
+}
+
+fn extract_error(output: &str) -> String {
+    let msg = output.trim();
+    if msg.is_empty() {
+        "安装失败: 未知错误".to_string()
+    } else {
+        format!("安装失败: {}", msg)
+    }
 }
 
 fn detect_connection_type(id: &str) -> ConnectionType {

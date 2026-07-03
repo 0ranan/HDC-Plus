@@ -165,6 +165,68 @@
 
 ---
 
+## Phase 6: User Story 2 —— HAP 包安装与管理 (Priority: P1) 🎯
+
+**目标**: 用户可以通过拖拽或文件选择器将 HAP 安装包安装到目标设备，实时查看安装进度和结果。
+
+**独立测试**: 选择本地 HAP 文件，指定目标设备，执行安装，在设备上确认应用已成功安装，即可独立验证。
+
+- [x] T023 [P] [US2] 添加 `tauri-plugin-dialog` 依赖到 `src-tauri/Cargo.toml` 并在 `src-tauri/src/lib.rs` 中注册插件
+- [x] T024 [P] [US2] 创建 `InstallTask` 数据模型在 `src-tauri/src/models/hap.rs`：
+  - 结构体 `InstallTask`：字段 `device_id`、`hap_path`、`status`、`start_time`、`end_time`、`error_message`
+  - 枚举 `InstallStatus`：`Pending`、`Installing`、`Success`、`Failed`、`Cancelled`
+  - 更新 `src-tauri/src/models/mod.rs` 导出该模块
+- [x] T025 [US2] 在 `src-tauri/src/hdc/client.rs` 中添加 HAP 相关方法：
+  - `install_hap(device_id: &str, hap_path: &str) -> Result<String, String>` → 执行 `hdc -t <id> install -r <path>`
+  - `validate_hap_file(path: &str) -> Result<(), String>` → 校验文件是否存在、扩展名是否为 .hap、文件大小是否大于 0
+- [x] T026 [US2] 创建 Tauri 命令在 `src-tauri/src/commands/hap.rs`：
+  - `#[tauri::command] install_hap(device_id, hap_path) -> Result<InstallTask, String>` → 安装 HAP 并返回任务结果
+  - `#[tauri::command] validate_hap(hap_path) -> Result<(), String>` → 校验 HAP 文件合法性
+  - 更新 `src-tauri/src/commands/mod.rs` 导出该模块
+- [x] T027 [US2] 在 `src-tauri/src/lib.rs` 中注册 HAP 相关 Tauri 命令（`install_hap`、`validate_hap`）
+
+### 前端实现
+
+- [x] T028 [P] [US2] 创建 TypeScript 类型定义在 `src/types/hap.ts`：
+  - 类型 `InstallStatus` 与接口 `InstallTask`，与 Rust `InstallTask` 结构体字段一一对应
+- [x] T029 [P] [US2] 创建 Tauri IPC 封装在 `src/utils/hap.ts`：
+  - `invokeInstallHap(deviceId, hapPath): Promise<InstallTask>`
+  - `invokeValidateHap(hapPath): Promise<void>`
+  - 统一中文错误提示
+- [x] T030 [US2] 创建 Pinia HAP 状态存储在 `src/stores/hap.ts`：
+  - 状态：`selectedHapPath`、`targetDeviceId`、`currentTask`、`installing`、`errorMessage`、`taskHistory`
+  - 动作：`selectHap()`、`selectTargetDevice()`、`validateAndSetHap()`、`installHap()`、`clearCurrentTask()`
+- [x] T031 [US2] 实现 HAP 安装面板组件在 `src/components/HapInstallPanel.vue`：
+  - 拖拽区域：使用 HTML5 drag-drop 接收 HAP 文件，显示拖拽状态提示
+  - "选择 HAP 文件"按钮：通过 `tauri-plugin-dialog` 打开原生文件选择器，过滤 .hap 文件
+  - 目标设备选择器：下拉列表显示所有在线设备，支持自动选中（仅一台在线时）
+  - "安装 HAP"按钮：触发放置逻辑，安装中显示加载状态
+  - 安装结果展示：使用 `el-alert` 显示安装成功/失败状态及错误信息
+  - 拖拽到在线设备卡片时自动设置目标设备并切换到 HAP 安装标签页
+- [x] T032 [US2] 在 `src/App.vue` 中集成 HAP 安装功能：
+  - 添加 `el-tabs` 标签页切换（"设备管理" / "HAP 安装"）
+  - 挂载 HapInstallPanel 组件到 "HAP 安装" 标签页
+  - 处理 window 级别 drag-over 事件，传递 `isDragOver` 状态给 DeviceList
+  - 处理设备卡片上的 HAP 拖放事件（`hap-drop`），自动设置目标设备并切换标签页
+- [x] T033 [US2] 更新 `DeviceCard.vue` 支持 HAP 拖放：
+  - 在线设备卡片作为拖放目标：`@dragover` / `@dragleave` / `@drop` 事件处理
+  - 拖拽悬停时高亮边框并显示"释放以安装到此设备"提示
+  - `drop` 事件获取文件路径并通过 `hap-drop` emit 传递
+- [x] T034 [US2] 更新 `DeviceList.vue` 传递拖放状态和事件：
+  - 接收 `isDragOver` prop，传递给 DeviceCard
+  - 接收并转发 `hap-drop` 事件
+
+### 验收验证
+
+- [x] T035 [US2] 验证 HAP 安装验收场景：
+  - ✅ 拖拽 HAP 文件到设备卡片 → 自动设置目标设备
+  - ✅ 通过文件选择器选取 HAP 文件 → 文件路径显示在拖放区域
+  - ✅ 安装前文件校验 → 非 .hap 文件显示"文件格式无效"
+  - ✅ 安装过程 → 显示加载状态和结果反馈
+  - ✅ 覆盖安装 → 使用 `-r` 参数支持更新安装
+
+---
+
 ## 依赖关系与执行顺序
 
 ### 阶段依赖
@@ -174,6 +236,7 @@
 - **Phase 3（Vue 前端）**: 依赖 Phase 1 完成 —— 阻塞所有用户故事
 - **Phase 4（US1）**: 依赖 Phase 2 和 Phase 3 完成
 - **Phase 5（Polish）**: 依赖 Phase 4 完成
+- **Phase 6（US2）**: 依赖 Phase 2、Phase 3 完成（HAP 安装需要设备已连接，但 UI 独立于 US1）
 
 ### 用户故事内依赖
 
@@ -183,6 +246,9 @@
 - T017 轮询依赖 T011（Pinia store）已有 `fetchDevices` 动作
 - T018 样式依赖 T012、T013 组件结构已确定
 - T019 断连处理依赖 T011（Pinia store）和 T017（轮询机制）
+- T031 HapInstallPanel 依赖 T030（HAP store）
+- T032 App.vue 集成依赖 T031（HapInstallPanel）、T033（DeviceCard 拖放）、T034（DeviceList 事件转发）
+- T033 DeviceCard 拖放依赖 T028（类型定义）
 
 ### 并行执行机会
 
@@ -203,6 +269,12 @@ Task: "T010 创建 Tauri IPC 封装"
 Task: "T012 DeviceCard 组件"
 Task: "T013 DeviceDetail 组件"  
 Task: "T015 ConnectDialog 组件"
+
+# Phase 6 并行任务：
+Task: "T023 注册 dialog 插件"
+Task: "T024 创建 InstallTask 模型"
+Task: "T028 定义 TypeScript 类型"
+Task: "T029 创建 IPC 封装"
 ```
 
 ---

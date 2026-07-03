@@ -5,6 +5,7 @@ import DeviceDetail from './DeviceDetail.vue'
 
 const props = defineProps<{
   showAddButton?: boolean
+  isDragOver?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -53,6 +54,7 @@ function handleRefresh(deviceId: string) {
             :key="device.id"
             :device="device"
             :is-selected="deviceStore.selectedDeviceId === device.id"
+            :is-drag-over="props.isDragOver === true && device.status === 'online'"
             @select="handleSelect"
           />
         </template>

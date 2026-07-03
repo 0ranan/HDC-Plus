@@ -1,17 +1,37 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { Device } from '../types/device'
 
 const props = defineProps<{
   device: Device
   isSelected: boolean
+  isDragOver?: boolean
 }>()
 
 const emit = defineEmits<{
   select: [deviceId: string]
 }>()
 
+const cardDragOver = ref(false)
 const statusText = props.device.status === 'online' ? '在线' : '离线'
 const connectionText = props.device.connectionType === 'USB' ? 'USB' : 'WiFi'
+
+function handleDragOver(e: DragEvent) {
+  if (props.device.status !== 'online') return
+  e.preventDefault()
+  e.stopPropagation()
+  cardDragOver.value = true
+}
+
+function handleDragLeave() {
+  cardDragOver.value = false
+}
+
+function handleDrop(e: DragEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  cardDragOver.value = false
+}
 </script>
 
 <template>
@@ -21,8 +41,13 @@ const connectionText = props.device.connectionType === 'USB' ? 'USB' : 'WiFi'
       'device-card--selected': isSelected,
       'device-card--online': device.status === 'online',
       'device-card--offline': device.status === 'offline',
+      'device-card--drag-over': cardDragOver || isDragOver,
     }"
+    :data-device-id="device.id"
     @click="emit('select', device.id)"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDrop"
   >
     <div class="device-card__header">
       <span class="device-card__status-dot" :class="`device-card__status-dot--${device.status}`"></span>
@@ -38,6 +63,9 @@ const connectionText = props.device.connectionType === 'USB' ? 'USB' : 'WiFi'
       <span class="device-card__status-text" :class="`device-card__status-text--${device.status}`">
         {{ statusText }}
       </span>
+    </div>
+    <div v-if="cardDragOver && device.status === 'online'" class="device-card__drop-hint">
+      释放以安装到此设备
     </div>
   </div>
 </template>
@@ -60,6 +88,12 @@ const connectionText = props.device.connectionType === 'USB' ? 'USB' : 'WiFi'
 .device-card--selected {
   border-color: var(--el-color-primary);
   box-shadow: 0 0 0 2px var(--el-color-primary-light-8);
+}
+
+.device-card--drag-over {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-5);
+  transform: scale(1.02);
 }
 
 .device-card--online {
@@ -129,5 +163,15 @@ const connectionText = props.device.connectionType === 'USB' ? 'USB' : 'WiFi'
 
 .device-card__status-text--offline {
   color: #c0c4cc;
+}
+
+.device-card__drop-hint {
+  margin-top: 8px;
+  padding: 4px 8px;
+  background-color: var(--el-color-primary-light-9);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  text-align: center;
 }
 </style>
